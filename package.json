@@ -1,0 +1,29 @@
+{
+  "name": "solana-card-sdk",
+  "version": "0.1.0",
+  "description": "Transport-agnostic TypeScript SDK for the SolanaApplet JavaCard hardware wallet",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@noble/ciphers": "^1.2.0",
+    "@noble/curves": "^1.8.0",
+    "@noble/hashes": "^1.7.0"
+  },
+  "devDependencies": {
+    "@solana/web3.js": "^1.98.4",
+    "@types/node": "^25.5.0",
+    "bip39": "^3.1.0",
+    "pcsclite": "^1.0.1",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.2"
+  },
+  "license": "AGPL-3.0"
+}
