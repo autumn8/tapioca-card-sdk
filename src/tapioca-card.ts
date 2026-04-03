@@ -1,10 +1,23 @@
 import {
-  APPLET_AID, INS, SIGN_P1, SW, SOLANA_PATH,
-  PIN_MIN_SIZE, PIN_MAX_SIZE, LABEL_MAX_SIZE, SIGN_CHUNK_SIZE,
+  APPLET_AID,
+  INS,
+  SIGN_P1,
+  SW,
+  SOLANA_PATH,
+  PIN_MIN_SIZE,
+  PIN_MAX_SIZE,
+  LABEL_MAX_SIZE,
+  SIGN_CHUNK_SIZE,
 } from './constants';
 import { selectApplet, sendApdu, sendApduChecked } from './apdu';
 import { SecureChannel } from './secure-channel';
-import { ApduResponse, CardError, CardStatus, CardTransport, HandshakeResult } from './types';
+import {
+  ApduResponse,
+  CardError,
+  CardStatus,
+  CardTransport,
+  HandshakeResult,
+} from './types';
 
 /**
  * High-level client for the SolanaApplet JavaCard hardware wallet.
@@ -23,7 +36,7 @@ import { ApduResponse, CardError, CardStatus, CardTransport, HandshakeResult } f
  * const signature = await card.signTransaction(messageBytes);
  * ```
  */
-export class SolanaCard {
+export class TapiocaCard {
   private readonly transport: CardTransport;
 
   /** Secure channel client — use for encrypted communication. */
@@ -36,7 +49,7 @@ export class SolanaCard {
 
   // ── Session management ───────────────────────────────────────────────────
 
-  /** SELECT the SolanaApplet. Call this first after every NFC tap. */
+  /** SELECT the TapiocaApplet. Call this first after every NFC tap. */
   async select(): Promise<void> {
     this.sc.reset();
     await selectApplet(this.transport, APPLET_AID);
@@ -48,17 +61,17 @@ export class SolanaCard {
   async getStatus(): Promise<CardStatus> {
     const d = await sendApduChecked(this.transport, INS.GET_STATUS, 0x00, 0x00);
     return {
-      protocolMajor:       d[0],
-      protocolMinor:       d[1],
-      appletMajor:         d[2],
-      appletMinor:         d[3],
-      pinTriesLeft:        d[4],
-      pinTriesMax:         d[5],
-      pukTriesLeft:        d[6],
-      pukTriesMax:         d[7],
-      isSeeded:            d[8] === 0x01,
+      protocolMajor: d[0],
+      protocolMinor: d[1],
+      appletMajor: d[2],
+      appletMinor: d[3],
+      pinTriesLeft: d[4],
+      pinTriesMax: d[5],
+      pukTriesLeft: d[6],
+      pukTriesMax: d[7],
+      isSeeded: d[8] === 0x01,
       secureChannelActive: d[9] === 0x01,
-      setupDone:           d[10] === 0x01,
+      setupDone: d[10] === 0x01,
     };
   }
 
@@ -146,17 +159,25 @@ export class SolanaCard {
    *
    * This takes ~2,700 ms on J3R180.
    */
-  async getPublicKey(path: readonly number[] = SOLANA_PATH): Promise<Uint8Array> {
+  async getPublicKey(
+    path: readonly number[] = SOLANA_PATH
+  ): Promise<Uint8Array> {
     const data = new Uint8Array(1 + path.length * 4);
     data[0] = path.length;
     for (let i = 0; i < path.length; i++) {
       const off = 1 + i * 4;
-      data[off]     = (path[i] >>> 24) & 0xff;
+      data[off] = (path[i] >>> 24) & 0xff;
       data[off + 1] = (path[i] >>> 16) & 0xff;
       data[off + 2] = (path[i] >>> 8) & 0xff;
       data[off + 3] = path[i] & 0xff;
     }
-    return sendApduChecked(this.transport, INS.GET_PUBLIC_KEY, 0x00, 0x00, data);
+    return sendApduChecked(
+      this.transport,
+      INS.GET_PUBLIC_KEY,
+      0x00,
+      0x00,
+      data
+    );
   }
 
   // ── Transaction signing ──────────────────────────────────────────────────
@@ -175,14 +196,14 @@ export class SolanaCard {
    */
   async signTransaction(
     message: Uint8Array,
-    path: readonly number[] = SOLANA_PATH,
+    path: readonly number[] = SOLANA_PATH
   ): Promise<Uint8Array> {
     // Build path header: [depth(1)] [idx_0(4)] ... [idx_n(4)]
     const header = new Uint8Array(1 + path.length * 4);
     header[0] = path.length;
     for (let i = 0; i < path.length; i++) {
       const off = 1 + i * 4;
-      header[off]     = (path[i] >>> 24) & 0xff;
+      header[off] = (path[i] >>> 24) & 0xff;
       header[off + 1] = (path[i] >>> 16) & 0xff;
       header[off + 2] = (path[i] >>> 8) & 0xff;
       header[off + 3] = path[i] & 0xff;
@@ -199,13 +220,21 @@ export class SolanaCard {
     if (remaining.length === 0) {
       // Single chunk
       return sendApduChecked(
-        this.transport, INS.SIGN_TX, SIGN_P1.FIRST_LAST, 0x00, firstChunkData,
+        this.transport,
+        INS.SIGN_TX,
+        SIGN_P1.FIRST_LAST,
+        0x00,
+        firstChunkData
       );
     }
 
     // Multi-chunk: first
     await sendApduChecked(
-      this.transport, INS.SIGN_TX, SIGN_P1.FIRST, 0x00, firstChunkData,
+      this.transport,
+      INS.SIGN_TX,
+      SIGN_P1.FIRST,
+      0x00,
+      firstChunkData
     );
 
     // Middle + last chunks
@@ -217,11 +246,19 @@ export class SolanaCard {
 
       if (isLast) {
         return sendApduChecked(
-          this.transport, INS.SIGN_TX, SIGN_P1.LAST, 0x00, chunk,
+          this.transport,
+          INS.SIGN_TX,
+          SIGN_P1.LAST,
+          0x00,
+          chunk
         );
       } else {
         await sendApduChecked(
-          this.transport, INS.SIGN_TX, SIGN_P1.CONTINUATION, 0x00, chunk,
+          this.transport,
+          INS.SIGN_TX,
+          SIGN_P1.CONTINUATION,
+          0x00,
+          chunk
         );
       }
       offset = end;
@@ -238,7 +275,12 @@ export class SolanaCard {
    * Returns the label as a UTF-8 string (empty string if not set).
    */
   async getLabel(): Promise<string> {
-    const data = await sendApduChecked(this.transport, INS.CARD_LABEL, 0x00, 0x00);
+    const data = await sendApduChecked(
+      this.transport,
+      INS.CARD_LABEL,
+      0x00,
+      0x00
+    );
     const len = data[0];
     if (len === 0) return '';
     return new TextDecoder().decode(data.slice(1, 1 + len));
@@ -251,7 +293,9 @@ export class SolanaCard {
   async setLabel(label: string): Promise<void> {
     const encoded = new TextEncoder().encode(label);
     if (encoded.length > LABEL_MAX_SIZE) {
-      throw new Error(`Label too long: ${encoded.length} bytes (max ${LABEL_MAX_SIZE})`);
+      throw new Error(
+        `Label too long: ${encoded.length} bytes (max ${LABEL_MAX_SIZE})`
+      );
     }
     const data = new Uint8Array(1 + encoded.length);
     data[0] = encoded.length;
@@ -288,7 +332,7 @@ export class SolanaCard {
     ins: number,
     p1: number,
     p2: number,
-    data?: Uint8Array,
+    data?: Uint8Array
   ): Promise<ApduResponse> {
     return this.sc.send(this.transport, ins, p1, p2, data);
   }
@@ -302,7 +346,7 @@ export class SolanaCard {
     p1: number,
     p2: number,
     data?: Uint8Array,
-    expectedSw = 0x9000,
+    expectedSw = 0x9000
   ): Promise<Uint8Array> {
     return this.sc.sendChecked(this.transport, ins, p1, p2, data, expectedSw);
   }
@@ -315,14 +359,23 @@ export class SolanaCard {
    * @returns true on success (SW = 0xFF00)
    */
   async resetToFactory(): Promise<void> {
-    await sendApduChecked(this.transport, INS.RESET_TO_FACTORY, 0x00, 0x00, undefined, SW.RESET_TO_FACTORY);
+    await sendApduChecked(
+      this.transport,
+      INS.RESET_TO_FACTORY,
+      0x00,
+      0x00,
+      undefined,
+      SW.RESET_TO_FACTORY
+    );
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
   private validatePinLength(pin: Uint8Array, name: string): void {
     if (pin.length < PIN_MIN_SIZE || pin.length > PIN_MAX_SIZE) {
-      throw new Error(`${name} must be ${PIN_MIN_SIZE}-${PIN_MAX_SIZE} bytes, got ${pin.length}`);
+      throw new Error(
+        `${name} must be ${PIN_MIN_SIZE}-${PIN_MAX_SIZE} bytes, got ${pin.length}`
+      );
     }
   }
 }

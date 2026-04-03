@@ -1,6 +1,6 @@
 #!/usr/bin/env ts-node
 /**
- * Example: Connect to SolanaApplet via PC/SC, import seed, and sign a
+ * Example: Connect to TapiocaApplet via PC/SC, import seed, and sign a
  * Solana transfer on devnet.
  *
  * Usage:
@@ -19,7 +19,7 @@ import {
   Transaction,
 } from '@solana/web3.js';
 import * as bip39 from 'bip39';
-import { SolanaCard, CardTransport, SOLANA_PATH } from '../src';
+import { TapiocaCard, CardTransport, SOLANA_PATH } from '../src';
 
 // ── PC/SC transport adapter ──────────────────────────────────────────────────
 
@@ -31,13 +31,13 @@ interface PcscReader {
   SCARD_LEAVE_CARD: number;
   connect(
     opts: { share_mode: number },
-    cb: (err: Error | null, protocol: number) => void,
+    cb: (err: Error | null, protocol: number) => void
   ): void;
   transmit(
     data: Buffer,
     maxLen: number,
     protocol: number,
-    cb: (err: Error | null, response: Buffer) => void,
+    cb: (err: Error | null, response: Buffer) => void
   ): void;
   disconnect(disposition: number, cb: () => void): void;
   on(event: 'status', cb: (status: { state: number }) => void): void;
@@ -48,7 +48,7 @@ interface PcscReader {
 class PcscTransport implements CardTransport {
   constructor(
     private reader: PcscReader,
-    private protocol: number,
+    private protocol: number
   ) {}
 
   transmit(command: Uint8Array): Promise<Uint8Array> {
@@ -57,7 +57,7 @@ class PcscTransport implements CardTransport {
         Buffer.from(command),
         4096,
         this.protocol,
-        (err, data) => (err ? reject(err) : resolve(new Uint8Array(data))),
+        (err, data) => (err ? reject(err) : resolve(new Uint8Array(data)))
       );
     });
   }
@@ -76,7 +76,7 @@ class PcscTransport implements CardTransport {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(
         () => reject(new Error(`No card detected after ${timeoutMs}ms`)),
-        timeoutMs,
+        timeoutMs
       );
       const pcsc = pcsclite();
 
@@ -84,17 +84,29 @@ class PcscTransport implements CardTransport {
         console.log(`  Reader: ${reader.name}`);
         reader.on('status', (status) => {
           const changes = reader.state ^ status.state;
-          if (changes & reader.SCARD_STATE_PRESENT && status.state & reader.SCARD_STATE_PRESENT) {
-            reader.connect({ share_mode: reader.SCARD_SHARE_SHARED }, (err, protocol) => {
-              clearTimeout(timeout);
-              if (err) reject(err);
-              else resolve(new PcscTransport(reader, protocol));
-            });
+          if (
+            changes & reader.SCARD_STATE_PRESENT &&
+            status.state & reader.SCARD_STATE_PRESENT
+          ) {
+            reader.connect(
+              { share_mode: reader.SCARD_SHARE_SHARED },
+              (err, protocol) => {
+                clearTimeout(timeout);
+                if (err) reject(err);
+                else resolve(new PcscTransport(reader, protocol));
+              }
+            );
           }
         });
-        reader.on('error', (err) => { clearTimeout(timeout); reject(err); });
+        reader.on('error', (err) => {
+          clearTimeout(timeout);
+          reject(err);
+        });
       });
-      pcsc.on('error', (err) => { clearTimeout(timeout); reject(err); });
+      pcsc.on('error', (err) => {
+        clearTimeout(timeout);
+        reject(err);
+      });
 
       console.log('  Waiting for card...');
     });
@@ -106,7 +118,9 @@ class PcscTransport implements CardTransport {
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   if (args.length === 0 || args[0] === '--help') {
-    console.log('Usage: npx ts-node examples/pcsc-sign.ts "<bip39 mnemonic>" [--pin <pin>]');
+    console.log(
+      'Usage: npx ts-node examples/pcsc-sign.ts "<bip39 mnemonic>" [--pin <pin>]'
+    );
     process.exit(args[0] === '--help' ? 0 : 1);
   }
 
@@ -124,20 +138,24 @@ async function main(): Promise<void> {
   // 1. Derive seed
   console.log('\n-- Derive seed from mnemonic --');
   const seed = Buffer.from(await bip39.mnemonicToSeed(mnemonic));
-  console.log(`  ${mnemonic.split(' ').length} words -> ${seed.length}-byte seed`);
+  console.log(
+    `  ${mnemonic.split(' ').length} words -> ${seed.length}-byte seed`
+  );
 
   // 2. Connect
   console.log('\n-- Connect to card --');
   const transport = await PcscTransport.connect();
-  const card = new SolanaCard(transport);
+  const card = new TapiocaCard(transport);
 
   // 3. Select applet
   await card.select();
-  console.log('  SolanaApplet selected.');
+  console.log('  TapiocaApplet selected.');
 
   // 4. Setup if needed
   const status = await card.getStatus();
-  console.log(`  setup=${status.setupDone}  seeded=${status.isSeeded}  pin_tries=${status.pinTriesLeft}`);
+  console.log(
+    `  setup=${status.setupDone}  seeded=${status.isSeeded}  pin_tries=${status.pinTriesLeft}`
+  );
 
   if (!status.setupDone) {
     console.log('  Running first-time setup...');
@@ -167,31 +185,41 @@ async function main(): Promise<void> {
 
   // 7. Solana devnet
   console.log('\n-- Solana devnet --');
-  const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
+  const connection = new Connection(
+    'https://api.devnet.solana.com',
+    'confirmed'
+  );
   let balance = await connection.getBalance(address);
   console.log(`  Balance: ${(balance / LAMPORTS_PER_SOL).toFixed(6)} SOL`);
 
   if (balance < 0.01 * LAMPORTS_PER_SOL) {
     console.log('  Requesting airdrop (1 SOL)...');
     const sig = await connection.requestAirdrop(address, LAMPORTS_PER_SOL);
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-    await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
+    const { blockhash, lastValidBlockHeight } =
+      await connection.getLatestBlockhash();
+    await connection.confirmTransaction(
+      { signature: sig, blockhash, lastValidBlockHeight },
+      'confirmed'
+    );
     balance = await connection.getBalance(address);
-    console.log(`  New balance: ${(balance / LAMPORTS_PER_SOL).toFixed(6)} SOL`);
+    console.log(
+      `  New balance: ${(balance / LAMPORTS_PER_SOL).toFixed(6)} SOL`
+    );
   }
 
   // 8. Build transaction
   console.log('\n-- Build transfer --');
   const recipient = Keypair.generate();
   const transferAmount = await connection.getMinimumBalanceForRentExemption(0);
-  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+  const { blockhash, lastValidBlockHeight } =
+    await connection.getLatestBlockhash();
 
   const tx = new Transaction().add(
     SystemProgram.transfer({
       fromPubkey: address,
       toPubkey: recipient.publicKey,
       lamports: transferAmount,
-    }),
+    })
   );
   tx.recentBlockhash = blockhash;
   tx.feePayer = address;
@@ -206,7 +234,9 @@ async function main(): Promise<void> {
   const t1 = Date.now();
   const sigBytes = await card.signTransaction(messageBytes);
   console.log(`  Signed in ${((Date.now() - t1) / 1000).toFixed(1)}s`);
-  console.log(`  Signature: ${Buffer.from(sigBytes).toString('hex').slice(0, 32)}...`);
+  console.log(
+    `  Signature: ${Buffer.from(sigBytes).toString('hex').slice(0, 32)}...`
+  );
 
   // 10. Broadcast
   console.log('\n-- Broadcast --');
@@ -217,13 +247,22 @@ async function main(): Promise<void> {
   }
   console.log('  Signature verified locally.');
 
-  const txSig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false });
+  const txSig = await connection.sendRawTransaction(tx.serialize(), {
+    skipPreflight: false,
+  });
   console.log(`  Sent: ${txSig}`);
 
-  await connection.confirmTransaction({ signature: txSig, blockhash, lastValidBlockHeight }, 'confirmed');
+  await connection.confirmTransaction(
+    { signature: txSig, blockhash, lastValidBlockHeight },
+    'confirmed'
+  );
   const finalBalance = await connection.getBalance(address);
-  console.log(`\n  Confirmed! Balance: ${(finalBalance / LAMPORTS_PER_SOL).toFixed(6)} SOL`);
-  console.log(`  Explorer: https://explorer.solana.com/tx/${txSig}?cluster=devnet\n`);
+  console.log(
+    `\n  Confirmed! Balance: ${(finalBalance / LAMPORTS_PER_SOL).toFixed(6)} SOL`
+  );
+  console.log(
+    `  Explorer: https://explorer.solana.com/tx/${txSig}?cluster=devnet\n`
+  );
 
   transport.disconnect();
   process.exit(0);

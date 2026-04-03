@@ -7,7 +7,7 @@ export function buildApdu(
   ins: number,
   p1: number,
   p2: number,
-  data?: Uint8Array,
+  data?: Uint8Array
 ): Uint8Array {
   if (data && data.length > 0) {
     const cmd = new Uint8Array(5 + data.length + 1);
@@ -38,7 +38,7 @@ export async function sendApdu(
   ins: number,
   p1: number,
   p2: number,
-  data?: Uint8Array,
+  data?: Uint8Array
 ): Promise<ApduResponse> {
   const cmd = buildApdu(CLA, ins, p1, p2, data);
   const raw = await transport.transmit(cmd);
@@ -52,22 +52,22 @@ export async function sendApduChecked(
   p1: number,
   p2: number,
   data?: Uint8Array,
-  expectedSw = 0x9000,
+  expectedSw = 0x9000
 ): Promise<Uint8Array> {
   const resp = await sendApdu(transport, ins, p1, p2, data);
   if (resp.sw !== expectedSw) {
     throw new CardError(
       `INS 0x${ins.toString(16)} failed: SW=${resp.sw.toString(16).toUpperCase().padStart(4, '0')}`,
-      resp.sw,
+      resp.sw
     );
   }
   return resp.data;
 }
 
-/** SELECT the SolanaApplet by AID. */
+/** SELECT the TapiocaApplet by AID. */
 export async function selectApplet(
   transport: CardTransport,
-  aid: Uint8Array,
+  aid: Uint8Array
 ): Promise<void> {
   const cmd = new Uint8Array(5 + aid.length);
   cmd[0] = 0x00; // CLA for ISO SELECT
