@@ -1,13 +1,14 @@
 {
-  "name": "solana-card-sdk",
+  "name": "tapioca-card-sdk",
   "version": "0.1.0",
-  "description": "Transport-agnostic TypeScript SDK for the SolanaApplet JavaCard hardware wallet",
+  "description": "Transport-agnostic TypeScript SDK for the TapiocaApplet JavaCard hardware wallet",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "check": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepare": "npm run build"
   },
   "files": [
     "dist"
