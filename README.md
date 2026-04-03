@@ -37,7 +37,7 @@ The SDK has no peer dependencies and no native bindings. All cryptography is pur
 ### Node.js (PC/SC)
 
 ```ts
-import { TapiocsCard, CardTransport } from 'tapioca-card-sdk';
+import { TapiocaCard, CardTransport } from 'tapioca-card-sdk';
 
 // Implement CardTransport for your platform
 class PcscTransport implements CardTransport {
