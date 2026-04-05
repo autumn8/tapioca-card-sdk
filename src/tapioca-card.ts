@@ -20,14 +20,14 @@ import {
 } from './types';
 
 /**
- * High-level client for the SolanaApplet JavaCard hardware wallet.
+ * High-level client for the TapiocaApplet JavaCard hardware wallet.
  *
  * Transport-agnostic — pass any `CardTransport` implementation
  * (PC/SC, react-native-nfc-manager, WebNFC, etc.).
  *
  * @example
  * ```ts
- * const card = new SolanaCard(myTransport);
+ * const card = new TapiocaCard(myTransport);
  * await card.select();
  * const status = await card.getStatus();
  * if (!status.setupDone) await card.setup(pin, puk);
@@ -89,7 +89,7 @@ export class TapiocaCard {
     data.set(pin, 1);
     data[1 + pin.length] = puk.length;
     data.set(puk, 2 + pin.length);
-    await sendApduChecked(this.transport, INS.SETUP, 0x00, 0x00, data);
+    await this.cmd(INS.SETUP, 0x00, 0x00, data);
   }
 
   // ── PIN management ───────────────────────────────────────────────────────
@@ -100,7 +100,7 @@ export class TapiocaCard {
    * @throws CardError with `triesRemaining` on wrong PIN.
    */
   async verifyPin(pin: Uint8Array): Promise<void> {
-    await sendApduChecked(this.transport, INS.VERIFY_PIN, 0x00, 0x00, pin);
+    await this.cmd(INS.VERIFY_PIN, 0x00, 0x00, pin);
   }
 
   /**
@@ -115,7 +115,7 @@ export class TapiocaCard {
     data.set(oldPin, 1);
     data[1 + oldPin.length] = newPin.length;
     data.set(newPin, 2 + oldPin.length);
-    await sendApduChecked(this.transport, INS.CHANGE_PIN, 0x00, 0x00, data);
+    await this.cmd(INS.CHANGE_PIN, 0x00, 0x00, data);
   }
 
   /**
@@ -130,7 +130,7 @@ export class TapiocaCard {
     data.set(puk, 1);
     data[1 + puk.length] = newPin.length;
     data.set(newPin, 2 + puk.length);
-    await sendApduChecked(this.transport, INS.UNBLOCK_PIN, 0x00, 0x00, data);
+    await this.cmd(INS.UNBLOCK_PIN, 0x00, 0x00, data);
   }
 
   // ── Seed & keys ──────────────────────────────────────────────────────────
@@ -143,12 +143,12 @@ export class TapiocaCard {
    */
   async importSeed(seed: Uint8Array): Promise<Uint8Array> {
     if (seed.length !== 64) throw new Error('Seed must be exactly 64 bytes');
-    return sendApduChecked(this.transport, INS.IMPORT_SEED, 0x00, 0x00, seed);
+    return this.cmd(INS.IMPORT_SEED, 0x00, 0x00, seed);
   }
 
   /** Wipe the seed and master key material. Requires PIN verified. */
   async resetSeed(): Promise<void> {
-    await sendApduChecked(this.transport, INS.RESET_SEED, 0x00, 0x00);
+    await this.cmd(INS.RESET_SEED, 0x00, 0x00);
   }
 
   /**
@@ -171,13 +171,7 @@ export class TapiocaCard {
       data[off + 2] = (path[i] >>> 8) & 0xff;
       data[off + 3] = path[i] & 0xff;
     }
-    return sendApduChecked(
-      this.transport,
-      INS.GET_PUBLIC_KEY,
-      0x00,
-      0x00,
-      data
-    );
+    return this.cmd(INS.GET_PUBLIC_KEY, 0x00, 0x00, data);
   }
 
   // ── Transaction signing ──────────────────────────────────────────────────
@@ -219,23 +213,11 @@ export class TapiocaCard {
 
     if (remaining.length === 0) {
       // Single chunk
-      return sendApduChecked(
-        this.transport,
-        INS.SIGN_TX,
-        SIGN_P1.FIRST_LAST,
-        0x00,
-        firstChunkData
-      );
+      return this.cmd(INS.SIGN_TX, SIGN_P1.FIRST_LAST, 0x00, firstChunkData);
     }
 
     // Multi-chunk: first
-    await sendApduChecked(
-      this.transport,
-      INS.SIGN_TX,
-      SIGN_P1.FIRST,
-      0x00,
-      firstChunkData
-    );
+    await this.cmd(INS.SIGN_TX, SIGN_P1.FIRST, 0x00, firstChunkData);
 
     // Middle + last chunks
     let offset = 0;
@@ -245,21 +227,9 @@ export class TapiocaCard {
       const isLast = end >= remaining.length;
 
       if (isLast) {
-        return sendApduChecked(
-          this.transport,
-          INS.SIGN_TX,
-          SIGN_P1.LAST,
-          0x00,
-          chunk
-        );
+        return this.cmd(INS.SIGN_TX, SIGN_P1.LAST, 0x00, chunk);
       } else {
-        await sendApduChecked(
-          this.transport,
-          INS.SIGN_TX,
-          SIGN_P1.CONTINUATION,
-          0x00,
-          chunk
-        );
+        await this.cmd(INS.SIGN_TX, SIGN_P1.CONTINUATION, 0x00, chunk);
       }
       offset = end;
     }
@@ -275,12 +245,7 @@ export class TapiocaCard {
    * Returns the label as a UTF-8 string (empty string if not set).
    */
   async getLabel(): Promise<string> {
-    const data = await sendApduChecked(
-      this.transport,
-      INS.CARD_LABEL,
-      0x00,
-      0x00
-    );
+    const data = await sendApduChecked(this.transport, INS.CARD_LABEL, 0x00, 0x00);
     const len = data[0];
     if (len === 0) return '';
     return new TextDecoder().decode(data.slice(1, 1 + len));
@@ -300,7 +265,7 @@ export class TapiocaCard {
     const data = new Uint8Array(1 + encoded.length);
     data[0] = encoded.length;
     data.set(encoded, 1);
-    await sendApduChecked(this.transport, INS.CARD_LABEL, 0x01, 0x00, data);
+    await this.cmd(INS.CARD_LABEL, 0x01, 0x00, data);
   }
 
   // ── Authentikey ──────────────────────────────────────────────────────────
@@ -359,17 +324,29 @@ export class TapiocaCard {
    * @returns true on success (SW = 0xFF00)
    */
   async resetToFactory(): Promise<void> {
-    await sendApduChecked(
-      this.transport,
-      INS.RESET_TO_FACTORY,
-      0x00,
-      0x00,
-      undefined,
-      SW.RESET_TO_FACTORY
-    );
+    await this.cmd(INS.RESET_TO_FACTORY, 0x00, 0x00, undefined, SW.RESET_TO_FACTORY);
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────
+
+  /**
+   * Send an authenticated command, routing through the secure channel when
+   * it is active. Public commands that require no authentication (getStatus,
+   * getLabel read, exportAuthentikey) must call sendApduChecked directly
+   * because the applet rejects SC-wrapped reads on a fresh card.
+   */
+  private async cmd(
+    ins: number,
+    p1: number,
+    p2: number,
+    data?: Uint8Array,
+    expectedSw = 0x9000
+  ): Promise<Uint8Array> {
+    if (this.sc.isActive) {
+      return this.sc.sendChecked(this.transport, ins, p1, p2, data, expectedSw);
+    }
+    return sendApduChecked(this.transport, ins, p1, p2, data, expectedSw);
+  }
 
   private validatePinLength(pin: Uint8Array, name: string): void {
     if (pin.length < PIN_MIN_SIZE || pin.length > PIN_MAX_SIZE) {

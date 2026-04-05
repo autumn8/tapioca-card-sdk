@@ -128,8 +128,8 @@ describe('SecureChannel', () => {
       const expectedMac = hmac(sha1, macKey, macInput);
       expect(Array.from(mac)).toEqual(Array.from(expectedMac));
 
-      // Decrypt and verify plaintext
-      const decipher = cbc(sessionKey, iv);
+      // Decrypt and verify plaintext (disablePadding to match card's NOPAD mode)
+      const decipher = cbc(sessionKey, iv, { disablePadding: true });
       const padded = decipher.decrypt(encrypted);
       const padByte = padded[padded.length - 1];
       const plaintext = padded.slice(0, padded.length - padByte);
