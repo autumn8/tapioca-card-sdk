@@ -168,18 +168,20 @@ export class SecureChannel {
     padded.set(plaintext);
     padded.fill(padLen, plaintext.length);
 
-    // Generate IV: 12 random bytes + 4-byte counter, last byte must be odd
+    // Generate IV: 12 random bytes + 4-byte counter, last byte must be odd.
+    // Map counter → (counter * 2 - 1) so the wire value is always odd AND
+    // strictly monotonic (the old `|= 0x01` made even/odd pairs collide).
     this.counter++;
+    const wireCounter = this.counter * 2 - 1;
     const iv = new Uint8Array(16);
     iv.set(randomBytes(12), 0);
-    iv[12] = (this.counter >>> 24) & 0xff;
-    iv[13] = (this.counter >>> 16) & 0xff;
-    iv[14] = (this.counter >>> 8) & 0xff;
-    iv[15] = this.counter & 0xff;
-    iv[15] |= 0x01; // ensure odd
+    iv[12] = (wireCounter >>> 24) & 0xff;
+    iv[13] = (wireCounter >>> 16) & 0xff;
+    iv[14] = (wireCounter >>> 8) & 0xff;
+    iv[15] = wireCounter & 0xff;
 
-    // Encrypt
-    const cipher = cbc(sk, iv);
+    // Encrypt (card uses ALG_AES_BLOCK_128_CBC_NOPAD — we handle PKCS#7 manually)
+    const cipher = cbc(sk, iv, { disablePadding: true });
     const encrypted = cipher.encrypt(padded);
 
     // MAC: HMAC-SHA1(mac_key, IV || data_size(2) || encrypted)
@@ -212,7 +214,7 @@ export class SecureChannel {
     const encSize = (data[16] << 8) | data[17];
     const ciphertext = data.slice(18, 18 + encSize);
 
-    const decipher = cbc(sk, iv);
+    const decipher = cbc(sk, iv, { disablePadding: true });
     const padded = decipher.decrypt(ciphertext);
 
     // Remove PKCS#7 padding

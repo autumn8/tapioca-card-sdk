@@ -8,6 +8,7 @@
     "build": "tsc",
     "check": "tsc --noEmit",
     "test": "vitest run",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "prepare": "npm run build"
   },
   "files": [
