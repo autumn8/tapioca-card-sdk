@@ -56,7 +56,7 @@ if (!status.setupDone) {
 
 await card.verifyPin(pin);
 const pubkey = await card.importSeed(seed64); // ~2.7s on J3R180
-const sig = await card.signTransaction(message); // ~4.2s on J3R180
+const { signature, publicKey } = await card.signTransaction(message); // ~4.2s on J3R180
 ```
 
 See [`examples/pcsc-sign.ts`](examples/pcsc-sign.ts) for a complete working Node.js example with airdrop and devnet broadcast.
@@ -152,13 +152,16 @@ try {
 #### Transaction Signing
 
 ```ts
-const signature = await card.signTransaction(
-  message: Uint8Array,   // output of transaction.serializeMessage()
-  path?: readonly number[] // defaults to m/44'/501'/0'
-): Promise<Uint8Array>   // 64-byte Ed25519 signature
+const { signature, publicKey } = await card.signTransaction(
+  message: Uint8Array   // output of transaction.serializeMessage()
+): Promise<SignResult>
+// signature  — 64-byte Ed25519 signature
+// publicKey  — 32-byte Ed25519 public key at m/44'/501'/0'
 ```
 
-Blind signing — the card signs the raw message bytes. Automatically handles multi-chunk streaming for messages > ~187 bytes. Max message size is 1,200 bytes. Total time ~4.2s on J3R180 (2.7s derivation + 1.4s signing).
+Blind signing — the card signs the raw message bytes. Automatically handles multi-chunk streaming for messages > 200 bytes. Max message size is 1,200 bytes. Total time ~4.2s on J3R180 (2.7s derivation + 1.4s signing).
+
+The response includes the public key, eliminating a separate `getPublicKey()` call when signing.
 
 Chunk P1 flags used internally:
 

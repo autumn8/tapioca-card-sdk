@@ -35,6 +35,14 @@ export interface CardStatus {
   setupDone: boolean;
 }
 
+/** Result returned by signTransaction. */
+export interface SignResult {
+  /** 64-byte Ed25519 signature. */
+  signature: Uint8Array;
+  /** 32-byte Ed25519 public key at m/44'/501'/0'. */
+  publicKey: Uint8Array;
+}
+
 /** Result of a secure channel handshake. */
 export interface HandshakeResult {
   /** 32-byte X-coordinate of the card's ephemeral SECP256K1 public key. */

@@ -211,32 +211,35 @@ describe('TapiocaCard', () => {
   });
 
   describe('signTransaction', () => {
+    const sig = new Array(64).fill(0xde);
+    const pubkey = new Array(32).fill(0xab);
+    const signResponse = [...sig, ...pubkey];
+
     it('sends single-chunk for small messages', async () => {
-      const sig = new Array(64).fill(0xde);
-      const transport = createMockTransport([ok(sig)]);
+      const transport = createMockTransport([ok(signResponse)]);
       card = new TapiocaCard(transport);
 
       const message = new Uint8Array(50);
       const result = await card.signTransaction(message);
 
-      expect(result.length).toBe(64);
+      expect(result.signature).toHaveLength(64);
+      expect(result.publicKey).toHaveLength(32);
       const cmd = transport.calls[0];
       expect(cmd[1]).toBe(INS.SIGN_TX);
       expect(cmd[2]).toBe(SIGN_P1.FIRST_LAST);
     });
 
     it('sends multi-chunk for large messages', async () => {
-      const sig = new Array(64).fill(0xde);
-      // First chunk gets 9000, last chunk gets signature + 9000
-      const transport = createMockTransport([ok(), ok(sig)]);
+      // First chunk gets 9000, last chunk gets signature + pubkey + 9000
+      const transport = createMockTransport([ok(), ok(signResponse)]);
       card = new TapiocaCard(transport);
 
-      // Message larger than single chunk capacity
-      // Header = 1 + 3*4 = 13 bytes, first chunk cap = 200 - 13 = 187
+      // First chunk capacity = SIGN_CHUNK_SIZE (200 bytes), so 250 bytes needs 2 chunks
       const message = new Uint8Array(250);
       const result = await card.signTransaction(message);
 
-      expect(result.length).toBe(64);
+      expect(result.signature).toHaveLength(64);
+      expect(result.publicKey).toHaveLength(32);
       expect(transport.calls.length).toBe(2);
 
       // First chunk: P1 = FIRST
@@ -246,15 +249,15 @@ describe('TapiocaCard', () => {
     });
 
     it('sends 3 chunks for messages that need continuation', async () => {
-      const sig = new Array(64).fill(0xde);
-      const transport = createMockTransport([ok(), ok(), ok(sig)]);
+      const transport = createMockTransport([ok(), ok(), ok(signResponse)]);
       card = new TapiocaCard(transport);
 
-      // 187 (first) + 200 (continuation) + remainder = need 3 chunks
+      // 200 (first) + 200 (continuation) + 100 (last) = 500 bytes, 3 chunks
       const message = new Uint8Array(500);
       const result = await card.signTransaction(message);
 
-      expect(result.length).toBe(64);
+      expect(result.signature).toHaveLength(64);
+      expect(result.publicKey).toHaveLength(32);
       expect(transport.calls.length).toBe(3);
       expect(transport.calls[0][2]).toBe(SIGN_P1.FIRST);
       expect(transport.calls[1][2]).toBe(SIGN_P1.CONTINUATION);
