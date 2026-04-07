@@ -56,4 +56,4 @@ export const PIN_MAX_SIZE = 16;
 export const LABEL_MAX_SIZE = 64;
 export const MAX_TX_MESSAGE_SIZE = 1200;
 export const APDU_DATA_MAX = 255;
-export const SIGN_CHUNK_SIZE = 200;
+export const SIGN_CHUNK_SIZE = 50;

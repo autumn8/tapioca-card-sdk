@@ -17,6 +17,7 @@ import {
   CardStatus,
   CardTransport,
   HandshakeResult,
+  SignResult,
 } from './types';
 
 /**
@@ -182,60 +183,46 @@ export class TapiocaCard {
    *
    * @param message Serialized transaction message bytes (max 1,200 bytes).
    *   This is the output of `transaction.serializeMessage()` from @solana/web3.js.
-   * @param path Derivation path (defaults to m/44'/501'/0')
-   * @returns 64-byte Ed25519 signature
+   * @returns 64-byte Ed25519 signature and the 32-byte public key at m/44'/501'/0'.
    *
-   * Automatically handles multi-chunk streaming for messages > ~187 bytes.
+   * Automatically handles multi-chunk streaming for messages > 200 bytes.
    * Total time: ~4,200 ms on J3R180 (2,700 ms derivation + 1,440 ms signing).
    */
-  async signTransaction(
-    message: Uint8Array,
-    path: readonly number[] = SOLANA_PATH
-  ): Promise<Uint8Array> {
-    // Build path header: [depth(1)] [idx_0(4)] ... [idx_n(4)]
-    const header = new Uint8Array(1 + path.length * 4);
-    header[0] = path.length;
-    for (let i = 0; i < path.length; i++) {
-      const off = 1 + i * 4;
-      header[off] = (path[i] >>> 24) & 0xff;
-      header[off + 1] = (path[i] >>> 16) & 0xff;
-      header[off + 2] = (path[i] >>> 8) & 0xff;
-      header[off + 3] = path[i] & 0xff;
-    }
-
-    const firstMsgCap = SIGN_CHUNK_SIZE - header.length;
-    const firstMsgLen = Math.min(message.length, firstMsgCap);
-    const firstChunkData = new Uint8Array(header.length + firstMsgLen);
-    firstChunkData.set(header);
-    firstChunkData.set(message.slice(0, firstMsgLen), header.length);
-
+  async signTransaction(message: Uint8Array): Promise<SignResult> {
+    const firstMsgLen = Math.min(message.length, SIGN_CHUNK_SIZE);
+    const firstChunkData = message.slice(0, firstMsgLen);
     const remaining = message.slice(firstMsgLen);
+
+    let raw: Uint8Array;
 
     if (remaining.length === 0) {
       // Single chunk
-      return this.cmd(INS.SIGN_TX, SIGN_P1.FIRST_LAST, 0x00, firstChunkData);
-    }
+      raw = await this.cmd(INS.SIGN_TX, SIGN_P1.FIRST_LAST, 0x00, firstChunkData);
+    } else {
+      // Multi-chunk: first
+      await this.cmd(INS.SIGN_TX, SIGN_P1.FIRST, 0x00, firstChunkData);
 
-    // Multi-chunk: first
-    await this.cmd(INS.SIGN_TX, SIGN_P1.FIRST, 0x00, firstChunkData);
-
-    // Middle + last chunks
-    let offset = 0;
-    while (offset < remaining.length) {
-      const end = Math.min(offset + SIGN_CHUNK_SIZE, remaining.length);
-      const chunk = remaining.slice(offset, end);
-      const isLast = end >= remaining.length;
-
-      if (isLast) {
-        return this.cmd(INS.SIGN_TX, SIGN_P1.LAST, 0x00, chunk);
-      } else {
-        await this.cmd(INS.SIGN_TX, SIGN_P1.CONTINUATION, 0x00, chunk);
+      // Middle + last chunks
+      let offset = 0;
+      while (offset < remaining.length) {
+        const end = Math.min(offset + SIGN_CHUNK_SIZE, remaining.length);
+        const chunk = remaining.slice(offset, end);
+        const isLast = end >= remaining.length;
+        if (isLast) {
+          raw = await this.cmd(INS.SIGN_TX, SIGN_P1.LAST, 0x00, chunk);
+          break;
+        } else {
+          await this.cmd(INS.SIGN_TX, SIGN_P1.CONTINUATION, 0x00, chunk);
+        }
+        offset = end;
       }
-      offset = end;
+      raw = raw!;
     }
 
-    // Should never reach here
-    throw new Error('signTransaction: unexpected end of chunking');
+    return {
+      signature: raw.slice(0, 64),
+      publicKey: raw.slice(64, 96),
+    };
   }
 
   // ── Card label ───────────────────────────────────────────────────────────

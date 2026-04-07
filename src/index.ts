@@ -26,5 +26,6 @@ export type {
   ApduResponse,
   CardStatus,
   HandshakeResult,
+  SignResult,
 } from './types';
 export { CardError } from './types';

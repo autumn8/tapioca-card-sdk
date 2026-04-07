@@ -218,18 +218,20 @@ describe('TapiocaCard E2E (PC/SC)', () => {
 
   // ── 6. Transaction signing ─────────────────────────────────────────────────
 
-  it('signTransaction: returns valid 64-byte Ed25519 signature', async () => {
-    const sig = await card.signTransaction(TEST_MESSAGE);
-    expect(sig).toHaveLength(64);
-    expect(ed25519.verify(sig, TEST_MESSAGE, pubkeyBytes)).toBe(true);
+  it('signTransaction: returns valid 64-byte Ed25519 signature and 32-byte pubkey', async () => {
+    const { signature, publicKey } = await card.signTransaction(TEST_MESSAGE);
+    expect(signature).toHaveLength(64);
+    expect(publicKey).toHaveLength(32);
+    expect(publicKey).toEqual(pubkeyBytes);
+    expect(ed25519.verify(signature, TEST_MESSAGE, pubkeyBytes)).toBe(true);
   }, 30_000);
 
   it('signTransaction: large message (multi-chunk) produces valid signature', async () => {
-    // 300 bytes forces at least 2 chunks (first cap = 200 - 13 header = 187)
+    // 300 bytes forces 2 chunks (first cap = SIGN_CHUNK_SIZE = 200 bytes)
     const largeMessage = new Uint8Array(300).fill(0xab);
-    const sig = await card.signTransaction(largeMessage);
-    expect(sig).toHaveLength(64);
-    expect(ed25519.verify(sig, largeMessage, pubkeyBytes)).toBe(true);
+    const { signature } = await card.signTransaction(largeMessage);
+    expect(signature).toHaveLength(64);
+    expect(ed25519.verify(signature, largeMessage, pubkeyBytes)).toBe(true);
   }, 30_000);
 
   // ── 7. Card label ──────────────────────────────────────────────────────────
